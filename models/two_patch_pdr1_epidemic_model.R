@@ -144,6 +144,8 @@ for(i in 1:length(patchSimList)){
 YieldData <- patchSimList %>% rbindlist() %>% as.data.frame()
 YieldData$patchAreaRatio <- YieldData$Sr0/Ss0
 
+hist(YieldData[YieldData$patchAreaRatio == 2,]$Yield, breaks = c(0,4,by=0.1))
+
 # Summarize simulation results
 summaryYield <- YieldData %>% group_by(patchAreaRatio) %>% summarise(mean = mean(Yield),
                                                                      median = median(Yield),
@@ -155,7 +157,7 @@ summaryYield <- YieldData %>% group_by(patchAreaRatio) %>% summarise(mean = mean
 #### Plotting with ggplot2
 #### Mean infected density of C, I, and V
 yieldAreaPlot <- ggplot(data=summaryYield) +
-  geom_line(aes(x=patchAreaRatio, y=mean), size=1.25, linetype = 1) +
+  geom_line(aes(x=patchAreaRatio, y=median), size=1.25, linetype = 1) +
   # Include lines for 95% confidence interval
   geom_line(aes(x=patchAreaRatio, y=cil), size=1.25, linetype = 2) +
   geom_line(aes(x=patchAreaRatio, y=ciu), size=1.25, linetype = 2) +
