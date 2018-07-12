@@ -143,13 +143,13 @@ SECIMPatchSimulations <- function(x){
   # Define starting values for states
   State <- c(Sr = x[28], Er = 0, Cr = 0, Ir = 0, Ur = Ur0, Vr = Vr0,
              Ss = Ss0, Es = 0, Cs = 0, Is = 0, Us = Us0, Vs = Vs0) 
-  Time <- seq(0, 50, by = 1) # time steps
+  Time <- seq(0, 500, by = 1) # time steps
   model.out <- as.data.frame(ode(func = SECIMPatchModel,
                                  y = State,
                                  parms = Pars,
                                  times = Time))
   # Need to remove some time steps because under/over flow results in NAs
   model.nona <- model.out[!is.na(model.out$Ir),]
-  model.dat <- model.nona[nrow(model.nona),c("time", "Cr", "Ir", "Vr", "Es", "Cs", "Is", "Vs")]
+  model.dat <- model.nona[nrow(model.nona),c("time", "Sr", "Cr", "Ir", "Vr", "Ss", "Es", "Cs", "Is", "Vs")]
   return(model.dat)
 }

@@ -51,15 +51,17 @@ Ur0 <- 0; Vr0 <- 0
 
 ##############################################################################################################################
 #### Run 2-patch model over range of Resistant patch sizes
-patchParams <- patchParams[1:1000,]
+runParams <- patchParams[1:500,]
+#runParams <- colMeans(patchParams) %>% t() %>% as.data.frame() # Just use the mean value of each parameter
+
 
 Sr0Vec <- seq(1,200,length.out = 10) %>% round()
 
 patchParList <- vector("list", length(Sr0Vec))
 
 for(i in 1:length(Sr0Vec)){
-  patchParams$Sr0Vec <- Sr0Vec[i]
-  patchParList[[i]] <- patchParams
+  runParams$Sr0Vec <- Sr0Vec[i]
+  patchParList[[i]] <- runParams
 }
 
 # Understanding what the primary spread term looks like
@@ -106,14 +108,8 @@ summaryPatch$state <- ifelse(summaryPatch$state == "Cs", "HC", "HI")
 #### Mean infected density of C, I, and V
 patchAreaPlot <- ggplot(data=summaryPatch, aes(x=patchAreaRatio, y=mean, group=state, shape=state)) +
   geom_line(aes(linetype=state), size=1.25) +
-  #geom_point(position = position_dodge(width = 0.05), aes(shape=state), size=3.5) +
-  #geom_errorbar(aes(ymax=ciu, ymin=cil, width=0.2), position = position_dodge(width = 0.05)) +
   scale_x_continuous(name = "Ratio Resistant patch : Susceptible patch area") +
-  #                    breaks = c(3,8,12)) + 
   scale_y_continuous(name = "Percent infected hosts in susceptible patch") +
-  # ylab("% insects on source plant") + 
-  #ylim(c(0,100)) +
-  # xlab("Genotype") +
   theme_bw(base_size=18) +
   theme(axis.line = element_line(colour = "black"),
         panel.grid.major = element_blank(),
@@ -124,6 +120,57 @@ patchAreaPlot <- ggplot(data=summaryPatch, aes(x=patchAreaRatio, y=mean, group=s
 patchAreaPlot
 
 ggsave("results/figures/SECI_patch_area_plot.jpg", plot = patchAreaPlot,
+       width = 7, height = 7, units = "in")
+
+
+
+
+###############################################################################################################
+#### Bioeconomic model
+#### First iteration of the model -- Yield = (c1*Ss + c2*Sr)[harvest]
+
+## Define relative economic value of healthy susceptible (Ss) and health resistant (Sr) grapevines at time of harvest
+## Assumes that Yield is proporitional to healthy grapevines at the end of the numerical simulations (harvest time)
+## If c1 > c2, then resistant grapevines have lower value
+c1 <- 1
+c2 <- 0.1
+
+## Calculate Yield for each simulation, from patchSimList line, above 
+for(i in 1:length(patchSimList)){
+  patchSimList[[i]]$Yield <- with(patchSimList[[i]], c1*Ss + c2*Sr)
+}
+
+## Convert to data.frame
+YieldData <- patchSimList %>% rbindlist() %>% as.data.frame()
+YieldData$patchAreaRatio <- YieldData$Sr0/Ss0
+
+# Summarize simulation results
+summaryYield <- YieldData %>% group_by(patchAreaRatio) %>% summarise(mean = mean(Yield),
+                                                                     median = median(Yield),
+                                                                     sd = sd(Yield),
+                                                                     cil = quantile(Yield, 0.025),
+                                                                     ciu = quantile(Yield, 0.975),
+                                                                     max = max(Yield))
+
+#### Plotting with ggplot2
+#### Mean infected density of C, I, and V
+yieldAreaPlot <- ggplot(data=summaryYield) +
+  geom_line(aes(x=patchAreaRatio, y=mean), size=1.25, linetype = 1) +
+  # Include lines for 95% confidence interval
+  geom_line(aes(x=patchAreaRatio, y=cil), size=1.25, linetype = 2) +
+  geom_line(aes(x=patchAreaRatio, y=ciu), size=1.25, linetype = 2) +
+  scale_x_continuous(name = "Ratio Resistant patch : Susceptible patch area") +
+  scale_y_continuous(name = "Yield") +
+  theme_bw(base_size=18) +
+  theme(axis.line = element_line(colour = "black"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_rect(colour = "black"),
+        panel.background = element_blank()) 
+
+yieldAreaPlot
+
+ggsave("results/figures/yield_patch_area_plot.jpg", plot = yieldAreaPlot,
        width = 7, height = 7, units = "in")
 
 
