@@ -150,6 +150,6 @@ SECIMPatchSimulations <- function(x){
                                  times = Time))
   # Need to remove some time steps because under/over flow results in NAs
   model.nona <- model.out[!is.na(model.out$Ir),]
-  model.dat <- model.nona[nrow(model.nona),c("time", "Sr", "Cr", "Ir", "Vr", "Ss", "Es", "Cs", "Is", "Vs")]
+  model.dat <- model.nona[nrow(model.nona),c("time", "Sr", "Er", "Cr", "Ir", "Vr", "Ss", "Es", "Cs", "Is", "Vs")]
   return(model.dat)
 }

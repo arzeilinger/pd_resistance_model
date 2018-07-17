@@ -6,7 +6,7 @@
 
 rm(list = ls())
 # Load packages
-my.packages <- c("tidyr", "dplyr", "data.table", "deSolve", "ggplot2")
+my.packages <- c("tidyr", "dplyr", "data.table", "deSolve", "ggplot2", "akima")
 lapply(my.packages, require, character.only = TRUE)
 
 source("R_functions/pdr1_epidemic_model_functions.R")
@@ -51,11 +51,11 @@ Ur0 <- 0; Vr0 <- 0
 
 ##############################################################################################################################
 #### Run 2-patch model over range of Resistant patch sizes
-runParams <- patchParams[1:500,]
-#runParams <- colMeans(patchParams) %>% t() %>% as.data.frame() # Just use the mean value of each parameter
+runParams <- patchParams[1:600,]
+runParams <- colMeans(patchParams) %>% t() %>% as.data.frame() # Just use the mean value of each parameter
 
 
-Sr0Vec <- seq(1,200,length.out = 10) %>% round()
+Sr0Vec <- seq(1,200,length.out = 20) %>% round()
 
 patchParList <- vector("list", length(Sr0Vec))
 
@@ -79,9 +79,13 @@ tf <- proc.time()
 
 #saveRDS(patchSimList, file = "output/simulation_results_2-patch_area.rds")
 
+
+## Add initial resistant plant population (Sr0) to each list element, calculate total infected plants, and total healthy plants
 for(i in 1:length(patchSimList)){
   patchSimList[[i]]$Sr0 <- Sr0Vec[i]
   patchSimList[[i]]$TI <- with(patchSimList[[i]], Cr + Ir + Cs + Is) # Total plants infected over all patches
+  patchSimList[[i]]$healthys <- with(patchSimList[[i]], Ss + Es + Cs) # Total healthy/asymptomatic plants in susceptible patch
+  patchSimList[[i]]$healthyr <- with(patchSimList[[i]], Sr + Er + Cr) # Total healthy/asymptomatic plants in resistant patch
 }
 # Convert to data.frame, remove Vc and Vi, and transform to "long" format
 patchSimData <- patchSimList %>% rbindlist() %>% as.data.frame() %>% dplyr::select(., Cr, Ir, Cs, Is, TI, Vs, Sr0) %>% 
@@ -127,17 +131,18 @@ ggsave("results/figures/SECI_patch_area_plot.jpg", plot = patchAreaPlot,
 
 ###############################################################################################################
 #### Bioeconomic model
-#### First iteration of the model -- Yield = (c1*Ss + c2*Sr)[harvest]
+#### First iteration of the model -- Yield = (c1*healthys + c2*healthyr)[harvest]
 
-## Define relative economic value of healthy susceptible (Ss) and health resistant (Sr) grapevines at time of harvest
+## Define relative economic value of total healthy susceptible (healthys = Ss + Es + Cs) and health resistant (healthyr = Sr + Er + Cr) grapevines at time of harvest
 ## Assumes that Yield is proporitional to healthy grapevines at the end of the numerical simulations (harvest time)
 ## If c1 > c2, then resistant grapevines have lower value
 c1 <- 1
 c2 <- 0.1
 
-## Calculate Yield for each simulation, from patchSimList line, above 
+
+## Calculate Yield for each simulation, from patchSimList output 
 for(i in 1:length(patchSimList)){
-  patchSimList[[i]]$Yield <- with(patchSimList[[i]], c1*Ss + c2*Sr)
+  patchSimList[[i]]$Yield <- with(patchSimList[[i]], c1*healthys + c2*healthyr)
 }
 
 ## Convert to data.frame
@@ -155,7 +160,7 @@ summaryYield <- YieldData %>% group_by(patchAreaRatio) %>% summarise(mean = mean
                                                                      max = max(Yield))
 
 #### Plotting with ggplot2
-#### Mean infected density of C, I, and V
+#### Yield and 95% confidence intervals from total healthy hosts
 yieldAreaPlot <- ggplot(data=summaryYield) +
   geom_line(aes(x=patchAreaRatio, y=median), size=1.25, linetype = 1) +
   # Include lines for 95% confidence interval
@@ -174,6 +179,49 @@ yieldAreaPlot
 
 ggsave("results/figures/yield_patch_area_plot.jpg", plot = yieldAreaPlot,
        width = 7, height = 7, units = "in")
+
+
+
+
+###############################################################################################################
+#### Run Bioeconomic model over a range of c2 values, and Sr and Ss outputs from the epidemic simulation
+
+## Function to calculate Yield when varying c2, Sr, and Ss
+## Sr and Ss outputs are in list object patchSimList
+# x[1] = healthy hosts in resistant patch
+# x[2] = value of yield from resistant vines relative to susceptible vines, assuming c1 = 1
+# x[3] = healthy hosts in susceptible patch
+simpleYield <- function(x){
+  Yield <- c1*x[3] + x[2]*x[1]
+}
+
+## Define a range of c2 values
+totalHealthy <- patchSimList %>% rbindlist %>% as.data.frame %>% dplyr::select(healthys, healthyr, Sr0)
+c2values <- seq(0.01, 10, length.out = 20)
+## Create combinations of each set of values of totalHealthy and c2 and combine into a data.frame
+yieldInputs <- expand.grid(healthyr = totalHealthy$healthyr, c2 = c2values) %>% 
+  left_join(., totalHealthy, by = "healthyr")
+
+# Set c1
+c1 <- 1
+
+## Calculate yield for each combination of totalHealthy hosts and c2, then clean it up for plotting
+YieldData <- apply(yieldInputs, 1, simpleYield) %>% cbind(., yieldInputs$c2, yieldInputs$Sr0) %>% as.data.frame()
+names(YieldData) <- c("yield", "c2", "Sr0")
+YieldData$patchAreaRatio <- YieldData$Sr0/Ss0
+
+
+#### Make a contourplot:
+# resistant patch area (relative) on x-axis
+# c2 value on y-axis
+# yield as contours/colors/z-axis
+zzyield <- interp(x = YieldData$patchAreaRatio, y = log10(YieldData$c2), z = YieldData$yield)
+tiff("results/figures/contourplot_yield.tiff")
+  filled.contour(zzyield, col = topo.colors(24),  
+                 xlab = "Ratio Resistant patch : Susceptible patch area",
+                 ylab = "Relative value of Resistant cultivar (log10(c2))",
+                 cex.lab = 1.3, cex.axis = 1.2, pty = "s")
+dev.off()
 
 
 ###############################################################################################################
